@@ -11,11 +11,13 @@
 /* implementations */
 #if defined(MAC68K) && !defined(MAC68K_CROSS)
 #define DLBRSRC /* use Mac resources */
+#elif defined(DLBMEM)
+/* use an archive embedded in the executable (see sys/sdl3) */
 #else
 #define DLBLIB /* use a set of external files */
 #endif
 
-#ifdef DLBLIB
+#if defined(DLBLIB) || defined(DLBMEM)
 /* directory structure in memory */
 typedef struct dlb_directory {
     char *fname;   /* file name as seen from calling code */
@@ -27,6 +29,9 @@ typedef struct dlb_directory {
 /* information about each open library */
 typedef struct dlb_library {
     FILE *fdata;   /* opened data file */
+#ifdef DLBMEM
+    const unsigned char *mdata; /* embedded archive image */
+#endif
     long fmark;    /* current file mark */
     libdir *dir;   /* directory of library file */
     char *sspace;  /* pointer to string space */
@@ -51,11 +56,11 @@ extern char *build_dlb_filename(const char *);
 #define FILENAME_CMP strcmp /* case sensitive */
 #endif
 
-#endif /* DLBLIB */
+#endif /* DLBLIB || DLBMEM */
 
 typedef struct dlb_handle {
     FILE *fp; /* pointer to an external file, use if non-null */
-#ifdef DLBLIB
+#if defined(DLBLIB) || defined(DLBMEM)
     library *lib; /* pointer to library structure */
     long start;   /* offset of start of file */
     long size;    /* size of file */
