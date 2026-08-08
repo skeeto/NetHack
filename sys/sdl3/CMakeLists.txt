@@ -298,7 +298,7 @@ file(WRITE "${GEN}/LICENSES.txt"
     "The embedded unscii-8 bitmap font (viznut) is in the public\n"
     "domain: http://viznut.fi/unscii/\n")
 
-install(TARGETS nethack RUNTIME DESTINATION .)
+install(TARGETS nethack RUNTIME DESTINATION . BUNDLE DESTINATION .)
 install(FILES "${GEN}/LICENSES.txt" "${NH_ROOT}/doc/Guidebook.txt"
         DESTINATION .)
 
@@ -307,19 +307,34 @@ foreach(_part VERSION_MAJOR VERSION_MINOR PATCHLEVEL)
          REGEX "#define ${_part}[ \t]+[0-9]")
     string(REGEX MATCH "[0-9]+" _${_part} "${_line}")
 endforeach()
+set(_ver "${_VERSION_MAJOR}.${_VERSION_MINOR}.${_PATCHLEVEL}")
+
+# macOS: package as NetHack.app.  All game data is embedded in the
+# executable (DLBMEM), so the bundle needs nothing beyond Info.plist.
+if(APPLE)
+    set_target_properties(nethack PROPERTIES
+        OUTPUT_NAME "NetHack"
+        MACOSX_BUNDLE TRUE
+        MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Info.plist.in"
+        MACOSX_BUNDLE_BUNDLE_NAME "NetHack"
+        MACOSX_BUNDLE_GUI_IDENTIFIER "org.nethack.nethack-sdl3"
+        MACOSX_BUNDLE_BUNDLE_VERSION "${_ver}"
+        MACOSX_BUNDLE_SHORT_VERSION_STRING "${_ver}")
+endif()
 if(WIN32)
     set(_os "win")
 else()
     string(TOLOWER "${CMAKE_SYSTEM_NAME}" _os)
 endif()
-if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+if(APPLE)
+    set(_arch "${CMAKE_SYSTEM_PROCESSOR}") # arm64 / x86_64
+elseif(CMAKE_SIZEOF_VOID_P EQUAL 8)
     set(_arch "x64")
 else()
     set(_arch "x86")
 endif()
 set(CPACK_PACKAGE_NAME "nethack-sdl3")
-set(CPACK_PACKAGE_VERSION
-    "${_VERSION_MAJOR}.${_VERSION_MINOR}.${_PATCHLEVEL}")
+set(CPACK_PACKAGE_VERSION "${_ver}")
 set(CPACK_PACKAGE_FILE_NAME
     "nethack-sdl3-${CPACK_PACKAGE_VERSION}-${_os}-${_arch}")
 set(CPACK_GENERATOR "ZIP")

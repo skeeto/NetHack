@@ -70,9 +70,11 @@ main(int argc, char *argv[])
 
     gh.hname = argv[0];
     svh.hackpid = getpid();
-#ifndef WIN32
-    (void) umask(0777 & ~FCMASK);
-#endif
+    /* No umask() here, unlike unixmain.c: its 0777 & ~FCMASK strips
+     * the execute bits, which is fatal for the directories this port
+     * creates at runtime (SDL_GetPrefPath, save/), and its purpose --
+     * group-writable files for a shared install -- doesn't apply to a
+     * per-user prefdir. */
 
     choose_windows(DEFAULT_WINDOW_SYS);
 

@@ -46,8 +46,9 @@ error(const char *fmt, ...)
     va_end(ap);
     (void) fprintf(stderr, "%s\n", buf);
     SDL_Log("%s", buf); /* reaches the debugger log in windowed builds */
-#ifdef WIN32
-    /* also reach players without a console (windowed builds) */
+#if defined(WIN32) || defined(__APPLE__)
+    /* also reach players without a console (windowed or Finder-launched
+       builds) */
     (void) SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "NetHack", buf,
                                     (SDL_Window *) 0);
 #endif

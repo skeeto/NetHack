@@ -18,8 +18,9 @@ cmake -S sys/sdl3 -B build
 cmake --build build -j
 ```
 
-The result is a single self-contained `build/nethack.exe`: the game
-data archive (`nhdat`) is embedded in the executable.
+The result is a single self-contained executable — `build/nethack.exe`
+on Windows, `build/NetHack.app` on macOS, `build/nethack` on Linux —
+with the game data archive (`nhdat`) embedded in it.
 
 On Linux, SDL3 additionally wants the usual X11/Wayland development
 headers installed to produce a usable video backend.
@@ -29,7 +30,7 @@ headers installed to produce a usable video backend.
 | CMake option | default | meaning |
 |---|---|---|
 | `NETHACK_UI` | `sdl3` | curses backend: `sdl3`, or PDCursesMod's `wincon`/`vt` (debug bring-up) |
-| `NETHACK_SDL3_PORTABLE` | `ON` on Windows | all runtime files (saves, scores, config) live next to the exe; `OFF` = `SDL_GetPrefPath` (`%AppData%\NetHack\NetHack-SDL3\`, `~/.local/share/NetHack/NetHack-SDL3/`) |
+| `NETHACK_SDL3_PORTABLE` | `ON` on Windows | all runtime files (saves, scores, config) live next to the exe; `OFF` = `SDL_GetPrefPath` (`%AppData%\NetHack\NetHack-SDL3\`, `~/Library/Application Support/NetHack/NetHack-SDL3/`, `~/.local/share/NetHack/NetHack-SDL3/`) |
 | `NETHACK_SDL3_CONSOLE` | `ON` | Windows console subsystem (early errors visible); `OFF` = pure GUI app |
 
 ## Packaging
@@ -38,7 +39,7 @@ headers installed to produce a usable video backend.
 cpack --config build/CPackConfig.cmake -B build
 ```
 
-produces `nethack-sdl3-<version>-win-<arch>.zip` containing the
+produces `nethack-sdl3-<version>-<os>-<arch>.zip` containing the
 executable, `LICENSES.txt` (NetHack + SDL3 + Lua + component notes,
 generated at configure time), and `Guidebook.txt`.  Running `cpack`
 directly does not rebuild, so post-build steps applied to
