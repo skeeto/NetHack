@@ -323,6 +323,9 @@ set(CPACK_PACKAGE_VERSION
 set(CPACK_PACKAGE_FILE_NAME
     "nethack-sdl3-${CPACK_PACKAGE_VERSION}-${_os}-${_arch}")
 set(CPACK_GENERATOR "ZIP")
+# just the three files at the archive root: the exe is the product and
+# the other two are plainly optional reading
+set(CPACK_INCLUDE_TOPLEVEL_DIRECTORY OFF)
 include(CPack)
 
 # Version stamp: only date.c consumes these.
