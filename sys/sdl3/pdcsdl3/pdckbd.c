@@ -6,9 +6,36 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* Single-slot event lookahead.  event.type == 0 means empty; a
+ * non-zero type is one pending event that check_key has surfaced and
+ * get_key has not yet consumed.  Nothing is ever pushed back onto
+ * SDL's queue (doing so rotates it and scrambles keystroke order). */
 static SDL_Event event;
 static SDL_Keycode oldkey;
 static MOUSE_STATUS old_mouse_status;
+
+/* Fill the lookahead slot if empty, handling (and skipping) window
+ * refresh events inline.  Returns TRUE if a real event is pending. */
+static bool
+_pump(void)
+{
+    if (event.type != 0)
+        return TRUE;
+    while (SDL_PollEvent(&event)) {
+        switch (event.type) {
+        case SDL_EVENT_WINDOW_EXPOSED:
+        case SDL_EVENT_WINDOW_RESTORED:
+        case SDL_EVENT_WINDOW_SHOWN:
+            if (pdc_window)
+                SDL_UpdateWindowSurface(pdc_window);
+            event.type = 0;
+            continue; /* not input; keep looking */
+        default:
+            return TRUE;
+        }
+    }
+    return FALSE;
+}
 
 /* pending UTF-8 text from SDL_EVENT_TEXT_INPUT (SDL3 text events are
    read-only; we copy them into this queue and consume from it) */
@@ -97,8 +124,7 @@ PDC_check_key(void)
     if (tq_pos < tq_len)
         return TRUE;
 
-    PDC_pump_and_peep();
-    return (bool) SDL_PollEvent(&event);
+    return _pump();
 }
 
 static int
@@ -134,6 +160,27 @@ _utf8_next(void)
         unicode = (unicode << 6) + (text_queue[tq_pos + i] & 0x3f);
     tq_pos += bytes;
     return unicode;
+}
+
+/* Set the held-modifier bits from a key event's captured state.
+   Neither accumulating presses/releases (a missed KEY_UP wedges
+   CONTROL on) nor querying SDL_GetModState() live (queued chords have
+   already been released by processing time) is reliable; the mod
+   field snapshotted in each event is. */
+static void
+_set_modifiers(SDL_Keymod m)
+{
+    SP->key_modifiers &= ~(PDC_KEY_MODIFIER_CONTROL | PDC_KEY_MODIFIER_ALT
+                           | PDC_KEY_MODIFIER_SHIFT
+                           | PDC_KEY_MODIFIER_NUMLOCK);
+    if (m & SDL_KMOD_CTRL)
+        SP->key_modifiers |= PDC_KEY_MODIFIER_CONTROL;
+    if (m & SDL_KMOD_ALT)
+        SP->key_modifiers |= PDC_KEY_MODIFIER_ALT;
+    if (m & SDL_KMOD_SHIFT)
+        SP->key_modifiers |= PDC_KEY_MODIFIER_SHIFT;
+    if (m & SDL_KMOD_NUM)
+        SP->key_modifiers |= PDC_KEY_MODIFIER_NUMLOCK;
 }
 
 /* handle ALT and CTRL sequences */
@@ -191,22 +238,7 @@ _process_key_event(void)
         repeat_count = 0;
 
     if (event.type == SDL_EVENT_KEY_UP) {
-        switch (event.key.key) {
-        case SDLK_LCTRL:
-        case SDLK_RCTRL:
-            SP->key_modifiers &= ~PDC_KEY_MODIFIER_CONTROL;
-            break;
-        case SDLK_LALT:
-        case SDLK_RALT:
-            SP->key_modifiers &= ~PDC_KEY_MODIFIER_ALT;
-            break;
-        case SDLK_LSHIFT:
-        case SDLK_RSHIFT:
-            SP->key_modifiers &= ~PDC_KEY_MODIFIER_SHIFT;
-            break;
-        }
-        if (!(SDL_GetModState() & SDL_KMOD_NUM))
-            SP->key_modifiers &= ~PDC_KEY_MODIFIER_NUMLOCK;
+        _set_modifiers(event.key.mod);
         if (!repeat_count)
             SP->key_modifiers &= ~PDC_KEY_MODIFIER_REPEAT;
 
@@ -232,26 +264,20 @@ _process_key_event(void)
     }
 
     oldkey = event.key.key;
-    if (SDL_GetModState() & SDL_KMOD_NUM)
-        SP->key_modifiers |= PDC_KEY_MODIFIER_NUMLOCK;
+    _set_modifiers(event.key.mod);
     if (repeat_count)
         SP->key_modifiers |= PDC_KEY_MODIFIER_REPEAT;
 
     switch (event.key.key) {
-    case SDLK_LCTRL:
-    case SDLK_RCTRL:
-        SP->key_modifiers |= PDC_KEY_MODIFIER_CONTROL;
-        break;
-    case SDLK_LALT:
-    case SDLK_RALT:
-        SP->key_modifiers |= PDC_KEY_MODIFIER_ALT;
-        break;
-    case SDLK_LSHIFT:
-    case SDLK_RSHIFT:
-        SP->key_modifiers |= PDC_KEY_MODIFIER_SHIFT;
-        break;
     case SDLK_RETURN:
         return 0x0d;
+    case SDLK_LCTRL:
+    case SDLK_RCTRL:
+    case SDLK_LALT:
+    case SDLK_RALT:
+    case SDLK_LSHIFT:
+    case SDLK_RSHIFT:
+        break; /* _set_modifiers() already recorded these */
     default:
         key = (int) event.key.key;
     }
@@ -277,10 +303,10 @@ _process_key_event(void)
         }
     }
 
-    /* text input doesn't fire for CTRL/ALT chords; synthesize them */
+    /* text input doesn't fire for CTRL/ALT chords; synthesize them
+       from the modifier state captured in this event */
     if (key && key < 0x80)
-        if (SP->key_modifiers
-            & (PDC_KEY_MODIFIER_CONTROL | PDC_KEY_MODIFIER_ALT)) {
+        if (event.key.mod & (SDL_KMOD_CTRL | SDL_KMOD_ALT)) {
             int rval = _handle_alt_keys(key);
 
             if (rval == _key_already_handled)
@@ -415,6 +441,9 @@ PDC_get_key(void)
     if (tq_pos < tq_len)
         return _process_text_queue();
 
+    if (!_pump())
+        return -1;
+
     switch (event.type) {
     case SDL_EVENT_QUIT:
         event.type = 0;
@@ -449,11 +478,6 @@ PDC_get_key(void)
         }
         break;
     }
-    case SDL_EVENT_WINDOW_EXPOSED:
-    case SDL_EVENT_WINDOW_RESTORED:
-        event.type = 0;
-        SDL_UpdateWindowSurface(pdc_window);
-        break;
     case SDL_EVENT_MOUSE_MOTION:
         SDL_ShowCursor();
         /* FALLTHRU */
@@ -461,7 +485,7 @@ PDC_get_key(void)
     case SDL_EVENT_MOUSE_BUTTON_DOWN:
     case SDL_EVENT_MOUSE_WHEEL:
         oldkey = SDLK_SPACE;
-        return _process_mouse_event();
+        return (event.type = 0), _process_mouse_event();
     case SDL_EVENT_TEXT_INPUT:
     {
         size_t n = strlen(event.text.text);
@@ -478,9 +502,15 @@ PDC_get_key(void)
     case SDL_EVENT_KEY_UP:
     case SDL_EVENT_KEY_DOWN:
         PDC_mouse_set();
-        return _process_key_event();
+        {
+            int k = _process_key_event();
+
+            event.type = 0;
+            return k;
+        }
     }
 
+    event.type = 0; /* consume anything unhandled so the slot frees */
     return -1;
 }
 
@@ -488,8 +518,12 @@ PDC_get_key(void)
 void
 PDC_flushinp(void)
 {
-    while (PDC_check_key())
-        PDC_get_key();
+    tq_pos = tq_len = 0;
+    _stored_key = 0;
+    event.type = 0;
+    while (SDL_PollEvent(&event))
+        ; /* drop everything currently queued */
+    event.type = 0;
 }
 
 bool

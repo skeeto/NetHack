@@ -231,20 +231,26 @@ PDC_doupdate(void)
     _debug_shot();
 }
 
-/* keep the display fresh on expose/restore while polling */
+/* Keep the display fresh on expose/restore during naps, WITHOUT
+   dequeuing input events -- pulling keystrokes here and pushing them
+   back rotates SDL's queue and scrambles typing.  Only window refresh
+   events are extracted (via SDL_PeepEvents), leaving input untouched
+   for the pdckbd lookahead to consume in order. */
 void
 PDC_pump_and_peep(void)
 {
-    SDL_Event event;
+    static const Uint32 refresh[] = { SDL_EVENT_WINDOW_EXPOSED,
+                                      SDL_EVENT_WINDOW_RESTORED,
+                                      SDL_EVENT_WINDOW_SHOWN };
+    SDL_Event ev;
+    size_t i;
 
-    if (SDL_PollEvent(&event)) {
-        if (event.type == SDL_EVENT_WINDOW_EXPOSED
-            || event.type == SDL_EVENT_WINDOW_RESTORED
-            || event.type == SDL_EVENT_WINDOW_SHOWN) {
-            SDL_UpdateWindowSurface(pdc_window);
+    SDL_PumpEvents();
+    for (i = 0; i < sizeof refresh / sizeof refresh[0]; i++)
+        while (SDL_PeepEvents(&ev, 1, SDL_GETEVENT, refresh[i], refresh[i])
+               > 0) {
+            if (pdc_window)
+                SDL_UpdateWindowSurface(pdc_window);
             rectcount = 0;
-        } else {
-            SDL_PushEvent(&event);
         }
-    }
 }
