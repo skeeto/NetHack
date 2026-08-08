@@ -271,6 +271,60 @@ if(WIN32)
     target_sources(nethack PRIVATE "${GEN}/nethack.rc")
 endif()
 
+# --- packaging (cpack -> zip) -----------------------------------------
+# LICENSES.txt: NetHack's license plus those of the fetched components.
+# (unscii-8 is public domain; PDCursesMod's core likewise, noted below.)
+file(READ "${NH_ROOT}/dat/license" _lic_nethack)
+file(READ "${sdl3_SOURCE_DIR}/LICENSE.txt" _lic_sdl)
+# the MIT license block is the comment at the tail of lua.h; the first
+# "Copyright (C)" in the file is the LUA_COPYRIGHT #define, so search
+# from the end
+file(READ "${LUASRC}/lua.h" _lua_h)
+string(FIND "${_lua_h}" "Copyright (C)" _lua_pos REVERSE)
+string(SUBSTRING "${_lua_h}" ${_lua_pos} -1 _lic_lua)
+string(REGEX REPLACE "[ \t]*\\*+/.*$" "" _lic_lua "${_lic_lua}")
+string(REGEX REPLACE "\n\\* ?" "\n" _lic_lua "${_lic_lua}")
+string(REPEAT "=" 70 _rule)
+file(WRITE "${GEN}/LICENSES.txt"
+    "This NetHack build links several components.  Their licenses:\n\n"
+    "${_rule}\nNetHack\n${_rule}\n\n${_lic_nethack}\n"
+    "${_rule}\nSDL3\n${_rule}\n\n${_lic_sdl}\n"
+    "${_rule}\nLua\n${_rule}\n\n${_lic_lua}\n\n"
+    "${_rule}\nPDCursesMod\n${_rule}\n\n"
+    "This build compiles PDCursesMod's core curses library and a\n"
+    "backend written for this port.  The core package is in the\n"
+    "public domain (see its README.md, \"Distribution Status\").\n\n"
+    "${_rule}\nunscii\n${_rule}\n\n"
+    "The embedded unscii-8 bitmap font (viznut) is in the public\n"
+    "domain: http://viznut.fi/unscii/\n")
+
+install(TARGETS nethack RUNTIME DESTINATION .)
+install(FILES "${GEN}/LICENSES.txt" "${NH_ROOT}/doc/Guidebook.txt"
+        DESTINATION .)
+
+foreach(_part VERSION_MAJOR VERSION_MINOR PATCHLEVEL)
+    file(STRINGS "${NH_ROOT}/include/patchlevel.h" _line
+         REGEX "#define ${_part}[ \t]+[0-9]")
+    string(REGEX MATCH "[0-9]+" _${_part} "${_line}")
+endforeach()
+if(WIN32)
+    set(_os "win")
+else()
+    string(TOLOWER "${CMAKE_SYSTEM_NAME}" _os)
+endif()
+if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+    set(_arch "x64")
+else()
+    set(_arch "x86")
+endif()
+set(CPACK_PACKAGE_NAME "nethack-sdl3")
+set(CPACK_PACKAGE_VERSION
+    "${_VERSION_MAJOR}.${_VERSION_MINOR}.${_PATCHLEVEL}")
+set(CPACK_PACKAGE_FILE_NAME
+    "nethack-sdl3-${CPACK_PACKAGE_VERSION}-${_os}-${_arch}")
+set(CPACK_GENERATOR "ZIP")
+include(CPack)
+
 # Version stamp: only date.c consumes these.
 execute_process(COMMAND git rev-parse HEAD
     WORKING_DIRECTORY "${NH_ROOT}" OUTPUT_VARIABLE NH_GIT_SHA

@@ -32,6 +32,18 @@ headers installed to produce a usable video backend.
 | `NETHACK_SDL3_PORTABLE` | `ON` on Windows | all runtime files (saves, scores, config) live next to the exe; `OFF` = `SDL_GetPrefPath` (`%AppData%\NetHack\NetHack-SDL3\`, `~/.local/share/NetHack/NetHack-SDL3/`) |
 | `NETHACK_SDL3_CONSOLE` | `ON` | Windows console subsystem (early errors visible); `OFF` = pure GUI app |
 
+## Packaging
+
+```
+cpack --config build/CPackConfig.cmake -B build
+```
+
+produces `nethack-sdl3-<version>-win-<arch>.zip` containing the
+executable, `LICENSES.txt` (NetHack + SDL3 + Lua + component notes,
+generated at configure time), and `Guidebook.txt`.  Running `cpack`
+directly does not rebuild, so post-build steps applied to
+`build/nethack.exe` (stripping, signing) survive into the package.
+
 ## Runtime files
 
 On first launch the game seeds `sysconf`, `.nethackrc`, and `symbols`
