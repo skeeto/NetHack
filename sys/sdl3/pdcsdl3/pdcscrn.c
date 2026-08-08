@@ -123,21 +123,27 @@ PDC_scr_open(void)
     maxw = usable.w * 95 / 100;
     maxh = usable.h * 90 / 100;
 
-    /* cell size: text notably larger than a terminal's, but the full
+    /* Cell size: text notably larger than a terminal's, but the full
        layout (80-column map + inventory pane + borders = ~110 cols)
-       must fit without map scrollbars.  NETHACK_SDL3_SCALE overrides. */
+       must fit without map scrollbars -- that constraint wins, down
+       to a scale of 1 on small displays (e.g. 1280x800).  Preferred
+       size is ~2x the display content scale: Windows sizes SDL3
+       windows in screen pixels and is always DPI-aware (cf. shogi
+       70649da), so this is what makes 4K text comfortably large.
+       NETHACK_SDL3_SCALE overrides. */
     {
         const char *env = SDL_getenv("NETHACK_SDL3_SCALE");
 
         pdc_scale = env ? SDL_atoi(env) : 0;
-        if (pdc_scale < 2 || pdc_scale > 16) {
-            pdc_scale = (int) (2.0f * content + 0.5f);
-            if (pdc_scale < 2)
-                pdc_scale = 2;
-            while (pdc_scale > 2
-                   && (110 * 8 * pdc_scale > maxw
-                       || PDC_MIN_ROWS * 8 * pdc_scale > maxh))
-                pdc_scale--;
+        if (pdc_scale < 1 || pdc_scale > 16) {
+            int fitw = maxw / (110 * 8);
+            int fith = maxh / (PDC_MIN_ROWS * 8);
+            int fit = (fitw < fith) ? fitw : fith;
+            int want = (int) (2.0f * content + 0.5f);
+
+            pdc_scale = (fit < want) ? fit : want;
+            if (pdc_scale < 1)
+                pdc_scale = 1;
         }
     }
     pdc_fwidth = pdc_fheight = 8 * pdc_scale;
