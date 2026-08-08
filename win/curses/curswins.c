@@ -26,7 +26,11 @@ typedef struct nhw {
     int x;                      /* start of window on terminal (left) */
     int y;                      /* start of window on terminal (top) */
     int orientation;            /* Placement of window relative to map */
-    boolean clr_inited;         /* fg/bg/colorpair inited? */
+    int clr_inited;             /* fg/bg/colorpair inited? -1/0/1, so it
+                                 * must not be boolean: NetHack boolean is
+                                 * unsigned char on MinGW, wrapping -1 to
+                                 * 255 and turning `clr_inited > 0` true
+                                 * with colorpair still -1 */
     int fg, bg;                 /* foreground, background color index */
     int colorpair;              /* color pair of fg, bg */
     boolean border;             /* Whether window has a visible border */
