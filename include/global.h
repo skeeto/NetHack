@@ -172,6 +172,10 @@ typedef uchar nhsym;
 #include "windconf.h"
 #endif
 
+#ifdef NETHACK_SDL3
+#include "sdl3conf.h" /* deltas applied on top of unixconf.h/windconf.h */
+#endif
+
 #include "warnings.h"
 
 /* amiconf.h needs to be the last nested #include of config.h because

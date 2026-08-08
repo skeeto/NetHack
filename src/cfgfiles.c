@@ -321,6 +321,13 @@ fopen_config_file(const char *filename, int src)
     if ((fp = fopen(configfile, "r")) != (FILE *) 0)
         return fp;
 #else /* should be only UNIX left */
+#ifdef NETHACK_SDL3
+    /* the SDL3 port keeps all runtime files in one directory; prefer
+       the seeded rc there, falling back to the classic $HOME location */
+    set_configfile_name(fqname(default_configfile, CONFIGPREFIX, 0));
+    if ((fp = fopen(configfile, "r")) != (FILE *) 0)
+        return fp;
+#endif
     envp = nh_getenv("HOME");
     if (!envp)
         Strcpy(tmp_config, ".nethackrc");
@@ -2202,7 +2209,7 @@ assure_syscf_file(void)
      * VMS overrides open() usage with a macro which requires it.
      */
 #ifndef VMS
-#if defined(NOCWD_ASSUMPTIONS) && defined(WIN32)
+#if defined(NOCWD_ASSUMPTIONS) && (defined(WIN32) || defined(NETHACK_SDL3))
     fd = open(fqname(SYSCF_FILE, SYSCONFPREFIX, 0), O_RDONLY);
 #else
     fd = open(SYSCF_FILE, O_RDONLY);
