@@ -9,7 +9,6 @@
 
 #ifdef _WIN32
 #include "win32api.h" /* windows.h wrapper; must precede hack.h */
-#include <bcrypt.h>
 #include <io.h>
 #endif
 
@@ -57,65 +56,87 @@ error(const char *fmt, ...)
 
 /* -------------------------------------------------------------------
  * Random seed and uuid
+ *
+ * Deliberately no OS crypto here: bcrypt.dll doesn't exist on the
+ * older Windows this port can otherwise run on, and a game's dungeon
+ * seed doesn't need cryptographic strength.  A high-resolution
+ * timestamp stirred through splitmix64 is plenty.  On POSIX,
+ * /dev/urandom is used when available (it also unlocks mid-game
+ * reseeding via has_strong_rngseed).
  */
+
+static Uint64
+mix64(Uint64 x)
+{
+    /* splitmix64 finalizer */
+    x += 0x9e3779b97f4a7c15u;
+    x = (x ^ (x >> 30)) * 0xbf58476d1ce4e5b9u;
+    x = (x ^ (x >> 27)) * 0x94d049bb133111ebu;
+    return x ^ (x >> 31);
+}
+
+static Uint64
+entropy64(void)
+{
+    Uint64 x = SDL_GetPerformanceCounter();
+
+    x = mix64(x ^ ((Uint64) getpid() << 32));
+    x = mix64(x ^ (Uint64) getnow()); /* time((TIME_type) 0) */
+    x = mix64(x ^ (Uint64) (uintptr_t) &x);
+    return x;
+}
 
 unsigned long
 sys_random_seed(void)
 {
-    unsigned long seed = 0L;
-    boolean no_seed = TRUE;
-#ifdef WIN32
-    if (BCryptGenRandom((BCRYPT_ALG_HANDLE) 0, (PUCHAR) &seed, sizeof seed,
-                        BCRYPT_USE_SYSTEM_PREFERRED_RNG) == 0) {
-        has_strong_rngseed = TRUE;
-        no_seed = FALSE;
-    }
-#else
+#ifndef WIN32
     FILE *fptr = fopen("/dev/urandom", "r");
 
     if (fptr) {
-        if (fread(&seed, sizeof seed, 1, fptr) == 1) {
-            has_strong_rngseed = TRUE;
-            no_seed = FALSE;
-        }
+        unsigned long seed = 0L;
+        boolean ok = (fread(&seed, sizeof seed, 1, fptr) == 1);
+
         (void) fclose(fptr);
+        if (ok) {
+            has_strong_rngseed = TRUE;
+            return seed;
+        }
     }
 #endif
-    if (no_seed) {
-        unsigned long pid = (unsigned long) getpid();
-
-        seed = (unsigned long) getnow(); /* time((TIME_type) 0) */
-        if (pid) {
-            if (!(pid & 3L))
-                pid -= 1L;
-            seed *= pid;
-        }
-    }
-    return seed;
+    return (unsigned long) entropy64();
 }
 
 void
 get_nhuuid(void)
 {
     unsigned char raw[16];
+    Uint64 s;
     int i;
 
     if (svn.nhuuid[0])
         return;
 
-#ifdef WIN32
-    if (BCryptGenRandom((BCRYPT_ALG_HANDLE) 0, (PUCHAR) raw, sizeof raw,
-                        BCRYPT_USE_SYSTEM_PREFERRED_RNG) != 0)
-#else
-    FILE *fptr = fopen("/dev/urandom", "r");
-    boolean ok = fptr && fread(raw, sizeof raw, 1, fptr) == 1;
+#ifndef WIN32
+    {
+        FILE *fptr = fopen("/dev/urandom", "r");
+        boolean ok = fptr && fread(raw, sizeof raw, 1, fptr) == 1;
 
-    if (fptr)
-        (void) fclose(fptr);
-    if (!ok)
+        if (fptr)
+            (void) fclose(fptr);
+        if (ok)
+            goto format;
+    }
 #endif
-        (void) memset(raw, 0, sizeof raw);
+    s = entropy64();
+    for (i = 0; i < 16; i += 2) {
+        Uint64 r = mix64(s + i);
 
+        raw[i] = (unsigned char) r;
+        raw[i + 1] = (unsigned char) (r >> 32);
+    }
+#ifndef WIN32
+ format:
+#endif
     /* RFC 4122 version 4 layout */
     raw[6] = (raw[6] & 0x0f) | 0x40;
     raw[8] = (raw[8] & 0x3f) | 0x80;

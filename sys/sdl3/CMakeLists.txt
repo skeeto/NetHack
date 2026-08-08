@@ -250,7 +250,6 @@ endif()
 target_link_libraries(nethack PRIVATE nh_pdcurses nh_lua SDL3::SDL3-static)
 
 if(WIN32)
-    target_link_libraries(nethack PRIVATE bcrypt)
     target_link_options(nethack PRIVATE -static)
     if(NOT NETHACK_SDL3_CONSOLE)
         set_target_properties(nethack PROPERTIES WIN32_EXECUTABLE TRUE)
