@@ -1,0 +1,27 @@
+{
+  "version": 6,
+  "configurePresets": [
+    {
+      "name": "w64devkit",
+      "displayName": "Windows (w64devkit gcc)",
+      "generator": "MinGW Makefiles",
+      "binaryDir": "${sourceDir}/../../build",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "linux",
+      "displayName": "Linux",
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/../../build",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    }
+  ],
+  "buildPresets": [
+    { "name": "w64devkit", "configurePreset": "w64devkit" },
+    { "name": "linux", "configurePreset": "linux" }
+  ]
+}
