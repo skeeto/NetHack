@@ -7253,8 +7253,11 @@ initoptions_init(void)
 #endif
 #endif /* UNIX || VMS */
 
-#if defined(MSDOS) || defined(WIN32)
-    /* Use IBM defaults. Can be overridden via config file */
+#if (defined(MSDOS) || defined(WIN32)) && !defined(NETHACK_SDL3)
+    /* Use IBM defaults. Can be overridden via config file.
+       (Not for the SDL3 port: this console-codepage default would
+       otherwise preempt win/curses' own "curses" symset default and
+       make Windows render differently from other platforms.) */
     if (!gs.symset[PRIMARYSET].explicitly)
         load_symset("IBMGraphics_2", PRIMARYSET);
     if (!gs.symset[ROGUESET].explicitly)
